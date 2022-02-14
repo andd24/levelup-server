@@ -1,9 +1,11 @@
+from multiprocessing import Event
 from django.forms import ValidationError
 from django.http import HttpResponseServerError
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from rest_framework import serializers, status
-from levelupapi.models import Game,Gamer
+from django.db.models import Count, Q
+from levelupapi.models import Game,Gamer, Event 
 
 class GameView(ViewSet):
     def retrieve(self, request, pk):
@@ -15,7 +17,9 @@ class GameView(ViewSet):
             return Response({'message': ex.args[0]}, status=status.HTTP_404_NOT_FOUND)
         
     def list(self, request):
-        games = Game.objects.all()
+        gamer = Gamer.objects.get(user=request.auth.user)
+        games = Game.objects.annotate(event_count=Count('events'),
+                                      user_event_count=Count('events', filter=Q(gamer=gamer)))
         game_type = request.query_params.get('type', None)
         if game_type is not None:
             games = games.filter(game_type_id=game_type)
@@ -50,9 +54,12 @@ class GameView(ViewSet):
 
 
 class GameSerializer(serializers.ModelSerializer):
+    event_count = serializers.IntegerField(default=None)
+    user_event_count = serializers.IntegerField(default=None)
     class Meta:
         model = Game
-        fields = ('id', 'title', 'maker', 'number_of_players', 'skill_level', 'game_type', 'gamer')
+        # fields = '__all__'
+        fields = ('id', 'title', 'maker', 'number_of_players', 'skill_level', 'game_type', 'gamer', 'event_count', 'user_event_count')
         depth = 1
 
 class CreateGameSerializer(serializers.ModelSerializer):
